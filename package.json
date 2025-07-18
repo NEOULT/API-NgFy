@@ -1,0 +1,34 @@
+{
+  "name": "api-reviewsnative",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ange1023/Api-ReviewsNative.git"
+  },
+  "type": "module",
+  "author": "Juan Camarillo and Angelina Pineda",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "api-reviewsnative": "file:",
+    "bcrypt": "^5.1.1",
+    "body-parser": "^2.2.0",
+    "cloudinary": "^2.6.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongodb": "^6.16.0",
+    "moongose": "^1.0.0",
+    "multer": "^2.0.1",
+    "node-fetch": "^3.3.2",
+    "streamifier": "^0.1.1",
+    "yt-search": "^2.13.1",
+    "ytdlp-nodejs": "^2.3.0"
+  }
+}
