@@ -6,11 +6,11 @@ import { verifyToken } from '../services/authService.js';
 const router = express.Router();
 
 router.get('/', SongController.getYoutubeInfoByName); // GET /songs
+router.get('/categories', SongController.getCategoriesSong); // GET /songs/categories
 router.get('/download', SongController.downloadYoutubeMultipleAudios); // GET /songs/all
 router.post('/paginate', SongController.paginate); // GET /songs/paginate
 router.get('/:id', SongController.getSongById); // GET /songs/:id
 router.post('/', upload.single('file'), verifyToken, SongController.create); // POST /songs
 router.put('/:id', upload.single('file'), verifyToken, SongController.update); // PUT /songs/:id
 router.delete('/:id', SongController.delete); // DELETE /songs/:id
-router.get('/categories', SongController.getCategoriesSong); // GET /songs/categories
 export default router;
