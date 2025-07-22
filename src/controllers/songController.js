@@ -61,28 +61,6 @@ class SongController {
             songs,
         });
     });
-
-    getYoutubeInfoByName = catchAsync(async (req, res, next) => {
-        const name = req.body.name;
-        const info = await SongService.getYoutubeInfoByName(name);
-        if (!info || info.length === 0) {
-            return sendResponse(res, 404, 'No se encontraron resultados para la búsqueda', null);
-        }
-        sendResponse(res, 200, 'Información de YouTube obtenida exitosamente', {
-            info,
-        });
-    });
-
-    dowloadYoutubeAudio = catchAsync(async (req, res, next) => {
-        const url = req.body.url;
-        const info = await SongService.downloadYoutubeAudioAndUpload(url);
-        if (!info) {
-            return sendResponse(res, 404, 'Información de YouTube no encontrada', null);
-        }
-        sendResponse(res, 200, 'Audio de YouTube descargado exitosamente', {
-            info,
-        });
-    });
 }
 
 export default new SongController();

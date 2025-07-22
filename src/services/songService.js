@@ -1,11 +1,8 @@
-import ytSearch from 'yt-search';
-import { YtDlp } from 'ytdlp-nodejs';
-import fs from 'fs/promises';
-import path from 'path';
 import SongModel from '../models/song.js';
 import { AppError } from '../utils/appError.js';
 import { supabaseClient } from '../database/supabase.js';
 import { sanitizeFileName } from '../utils/sanitizeFilename.js';
+import { parseBuffer } from 'music-metadata';
 
 class SongService {
     // =================== Utility Methods ===================
@@ -37,6 +34,16 @@ class SongService {
             throw new AppError("Ya existe una canción con ese título", 400, { title: songData.title });
         }
 
+        // Obtener duración del archivo de audio
+        let duration = 0;
+        try {
+            const metadata = await parseBuffer(songData.file.buffer, songData.file.mimetype);
+            duration = Math.round(metadata.format.duration); // duración en segundos
+        } catch (error) {
+            console.log("No se pudo obtener la duración del archivo:", error);
+            throw new AppError("No se pudo obtener la duración del archivo de audio", 400, error);
+        }
+
         // Validar datos usando el modelo Mongoose real
         const { default: Song } = await import('../schemas/song.js');
         const tempSong = new Song({ ...songData, file: undefined, url: 'http://temporal.mp3' });
@@ -49,6 +56,7 @@ class SongService {
 
         const response = await this.uploadSong(songData.file, songData.title);
         songData.url = process.env.SUPABASE_URL_UPLOAD + "/" + response.path;
+        songData.duration = duration; // Asignar duración calculada
 
         let song;
         try {
@@ -167,223 +175,6 @@ class SongService {
         );
         if (error) throw new AppError("Error uploading song", 500, error);
         return data;
-    }
-
-    // =================== YouTube Utilities ===================
-    /**
-     * Obtiene información de un video de YouTube por URL usando yt-dlp.
-     */
-    async getYoutubeInfo(url = "https://www.youtube.com/watch?v=e1Amrb9MxBM&list=RDe1Amrb9MxBM&start_radio=1") {
-        const ytdlp = new YtDlp();
-        try {
-            const info = await ytdlp.getInfoAsync(url);
-            console.log(info);
-            
-            return {
-                title: info.title,
-                duration: info.duration,
-                thumbnail: info.thumbnail,
-                url: info.webpage_url,
-                artist: info.uploader || info.channel || null,
-            };
-        } catch (error) {
-            throw new AppError("Error obteniendo información de YouTube", 500, error);
-        }
-    }
-
-    /**
-     * Busca videos de YouTube por nombre/título y devuelve los primeros 20 resultados relevantes.
-     */
-    async getYoutubeInfoByName(name) {
-        try {
-            const result = await ytSearch(name);
-            if (!result || !result.videos || result.videos.length === 0) {
-                throw new AppError('No se encontró ningún video para ese nombre', 404, name);
-            }
-            // Filtrar videos que pesen menos de 10MB (estimación)
-            // Suponiendo bitrate promedio de 128kbps para audio (16KB/s)
-            const MAX_SIZE_MB = 10;
-            const BITRATE_KBPS = 128;
-            const BYTES_PER_SEC = (BITRATE_KBPS * 1000) / 8;
-            // Para cada video, obtener info de yt-dlp y detectar si solo tiene DASH/HLS
-            const ytdlp = new YtDlp();
-            const videos = result.videos.slice(0, 10); // Limitar a 10 para evitar sobrecarga
-            const promises = videos.map(async video => {
-                let durationSec = 0;
-                if (video.seconds) durationSec = video.seconds;
-                else if (video.duration && typeof video.duration === 'string') {
-                    const parts = video.duration.split(':').map(Number);
-                    if (parts.length === 3) durationSec = parts[0]*3600 + parts[1]*60 + parts[2];
-                    else if (parts.length === 2) durationSec = parts[0]*60 + parts[1];
-                }
-                let isDashOrHls = false;
-                let isDownloadable = false;
-                let downloadError = null;
-                try {
-                    const info = await ytdlp.getInfoAsync(video.url);
-                    if (info && info.formats) {
-                        const allSegmented = info.formats.every(f => f.protocol === 'dash' || f.protocol === 'm3u8');
-                        isDashOrHls = allSegmented;
-                    }
-                    // Simular descarga con yt-dlp (solo info, no descarga real)
-                    try {
-                        await ytdlp.download(video.url, {
-                            output: 'simulate',
-                            simulate: true,
-                            extractAudio: true,
-                            audioFormat: 'm4a'
-                        });
-                        isDownloadable = true;
-                    } catch (err) {
-                        isDownloadable = false;
-                        downloadError = err?.message || String(err);
-                    }
-                } catch (err) {
-                    downloadError = err?.message || String(err);
-                }
-                return {
-                    title: video.title,
-                    duration: video.duration.timestamp || video.duration,
-                    thumbnail: video.thumbnail,
-                    url: video.url,
-                    artist: video.author.name || null,
-                    dashOrHlsOnly: isDashOrHls,
-                    isDownloadable,
-                    downloadError,
-                };
-            });
-            return await Promise.all(promises);
-        } catch (error) {
-            throw new AppError('Error buscando video de YouTube por nombre', 500, error);
-        }
-    }
-
-    /**
-     * Descarga el audio de un video de YouTube, lo sube a Supabase y elimina el archivo temporal.
-     * Si ocurre un error, limpia los archivos generados.
-     */
-    /**
-     * Descarga el audio de un video de YouTube, lo sube a Supabase, lo asigna a la categoría 'NGFY' y crea el registro en la base de datos.
-     * Si ocurre error al crear el modelo, elimina el archivo de Supabase.
-     */
-    async downloadYoutubeAudioAndUpload(url) {
-        const ytdlp = new YtDlp();
-        const info = await ytdlp.getInfoAsync(url);
-        const baseName = sanitizeFileName(`${info.title || 'audio_youtube'}`);
-        const outputPattern = path.resolve(`${baseName}.%(ext)s`);
-        let outputPath = null;
-        let audioFile = null;
-        let categoryId = null;
-        let supabasePath = null;
-        try {
-            // Buscar la categoría por nombre 'NGFY'
-            const CategoryModel = (await import('../schemas/category.js')).default;
-            const category = await CategoryModel.findOne({ name: 'NGFY' });
-            console.log(category);
-            
-            if (!category) throw new AppError("No existe la categoría 'NGFY'", 400, 'downloadYoutubeAudioAndUpload');
-            categoryId = category._id;
-
-            ytdlp.download(url, {
-                output: outputPattern,
-                extractAudio: true,
-                audioFormat: 'm4a'
-            });
-
-            console.log('yt-dlp download finished');
-
-            const fsSync = await import('fs');
-            const waitTimeout = 60000;
-            const pollInterval = 200;
-            const start = Date.now();
-            let found = false;
-            const validExts = ['.m4a', '.webm', '.mp3', '.opus', '.ogg'];
-            while (Date.now() - start < waitTimeout) {
-                const files = fsSync.readdirSync(process.cwd())
-                    .filter(f => validExts.some(ext => f.endsWith(ext)) && f.includes(baseName));
-                if (files.length > 0) {
-                    files.sort((a, b) => fsSync.statSync(b).mtimeMs - fsSync.statSync(a).mtimeMs);
-                    for (const f of files) {
-                        const stat = fsSync.statSync(f);
-                        if (stat.size > 0) {
-                            audioFile = f;
-                            outputPath = path.resolve(f);
-                            found = true;
-                            break;
-                        }
-                    }
-                }
-                if (found) break;
-                await new Promise(res => setTimeout(res, pollInterval));
-            }
-            if (!found) {
-                throw new AppError("yt-dlp no generó el archivo de audio a tiempo", 500, { baseName });
-            }
-
-            console.log('Archivo de audio listo:', audioFile);
-            const buffer = await fs.readFile(outputPath);
-
-            const ext = path.extname(audioFile).toLowerCase();
-            let contentType = 'audio/mp4';
-            if (ext === '.webm') contentType = 'audio/webm';
-            else if (ext === '.mp3') contentType = 'audio/mpeg';
-            else if (ext === '.opus') contentType = 'audio/ogg';
-            else if (ext === '.ogg') contentType = 'audio/ogg';
-
-            const { data, error } = await supabaseClient.storage.from('audios').upload(
-                audioFile,
-                buffer,
-                {
-                    cacheControl: '3600',
-                    upsert: false,
-                    contentType
-                }
-            );
-            if (error) throw new AppError("Error subiendo audio a Supabase", 500, error);
-            await fs.unlink(outputPath);
-            supabasePath = data?.path || audioFile;
-
-            // Crear el registro en la base de datos
-            const songData = {
-                title: info.title,
-                artist: info.uploader || info.channel || 'Desconocido',
-                url: process.env.SUPABASE_URL_UPLOAD + '/' + supabasePath,
-                duration: info.duration || 0,
-                poster_image: info.thumbnail || undefined,
-                category: categoryId
-            };
-            // Validar y crear la canción
-            const tempSong = new SongModel(songData);
-            try {
-                await tempSong.validate();
-            } catch (error) {
-                // Eliminar el archivo de Supabase si falla la validación
-                await supabaseClient.storage.from('audios').remove([supabasePath]);
-                throw new AppError("Datos de la canción no válidos", 400, error);
-            }
-            let song;
-            try {
-                song = await SongModel.create(songData);
-                if (!song) throw new AppError("Error al crear la canción", 400, "downloadYoutubeAudioAndUpload");
-            } catch (error) {
-                await supabaseClient.storage.from('audios').remove([supabasePath]);
-                throw error;
-            }
-            return song;
-        } catch (error) {
-            console.error('Error real al procesar audio de YouTube:', error);
-            try {
-                const fsSync = await import('fs');
-                const validExts = ['.m4a', '.webm', '.mp3', '.opus', '.ogg'];
-                const files = fsSync.readdirSync(process.cwd());
-                await Promise.all(
-                    files.filter(f => validExts.some(ext => f.endsWith(ext)) && f.includes(baseName)).map(async f => {
-                        try { await fs.unlink(path.resolve(f)); } catch {}
-                    })
-                );
-            } catch {}
-            throw new AppError("Error procesando audio de YouTube", 500, error);
-        }
     }
 }
 
