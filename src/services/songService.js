@@ -3,6 +3,7 @@ import { AppError } from '../utils/appError.js';
 import { supabaseClient } from '../database/supabase.js';
 import { sanitizeFileName } from '../utils/sanitizeFilename.js';
 import { parseBuffer } from 'music-metadata';
+import { categoryService } from './categoryService.js';
 import { YtDlp } from 'ytdlp-nodejs'
 import ytSearch from 'yt-search'
 import path from 'path';
@@ -412,6 +413,11 @@ class SongService {
             }
         }
         return results;
+    }
+
+
+    async getCategoriesSong() {
+        return await categoryService.getAllCategories();
     }
 }
 

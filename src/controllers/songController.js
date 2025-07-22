@@ -93,6 +93,15 @@ class SongController {
         });
     })
 
+    getCategoriesSong = catchAsync(async (req, res, next) => {
+        const categories = await SongService.getCategoriesSong();
+        if (!categories || categories.length === 0) {
+            return sendResponse(res, 404, 'No se encontraron categorías', null);
+        }
+        sendResponse(res, 200, 'Categorías encontradas exitosamente', {
+            categories,
+        });
+    });
 }
 
 export default new SongController();
