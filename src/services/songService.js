@@ -3,13 +3,16 @@ import { AppError } from '../utils/appError.js';
 import { supabaseClient } from '../database/supabase.js';
 import { sanitizeFileName } from '../utils/sanitizeFilename.js';
 import { parseBuffer } from 'music-metadata';
-
+import { YtDlp } from 'ytdlp-nodejs'
+import ytSearch from 'yt-search'
+import path from 'path';
+import fs from 'fs/promises';
 class SongService {
     // =================== Utility Methods ===================
     /**
      * Espera hasta que el archivo exista y tenga tamaño > 0 (timeout de 10s)
      */
-    async waitForFile(filePath, timeout = 10000) {
+    async waitForFile(filePath, timeout = 60000) {
         const start = Date.now();
         const fsSync = await import('fs');
         while (Date.now() - start < timeout) {
@@ -140,12 +143,31 @@ class SongService {
     }
 
     /**
-     * Obtiene una canción por su ID.
+     * Obtiene una canción por su ID y una canción parecida (por título o aleatoria por categoría).
      */
     async getSongById(songId) {
         const song = await SongModel.findById(songId);
         if (!song) throw new AppError("Song not found", 404, "SongService.getSongById");
-        return song;
+
+        // Buscar una canción parecida por título (excluyendo la actual)
+        let similarSong = await SongModel.findOne({
+            title: { $regex: song.title.split(' ')[0], $options: 'i' },
+            _id: { $ne: songId }
+        });
+
+        // Si no se encuentra por título, buscar una aleatoria por categoría
+        if (!similarSong && song.category) {
+            const [randomSong] = await SongModel.model.aggregate([
+                { $match: { category: song.category, _id: { $ne: song._id } } },
+                { $sample: { size: 1 } }
+            ]);
+            similarSong = randomSong || null;
+        }
+
+        return {
+            song,
+            similar: similarSong || null
+        };
     }
 
     /**
@@ -175,6 +197,221 @@ class SongService {
         );
         if (error) throw new AppError("Error uploading song", 500, error);
         return data;
+    }
+
+    /**
+     * Busca videos de YouTube por nombre/título y devuelve los primeros 20 resultados relevantes.
+     */
+    async getYoutubeInfoByName(name) {
+        try {
+            const result = await ytSearch(name);
+            
+            if (!result || !result.videos || result.videos.length === 0) {
+                throw new AppError('No se encontró ningún video para ese nombre', 404, name);
+            }
+            // Filtrar videos que pesen menos de 10MB (estimación)
+            // Suponiendo bitrate promedio de 128kbps para audio (16KB/s)
+            const MAX_SIZE_MB = 10;
+            const BITRATE_KBPS = 128;
+            const BYTES_PER_SEC = (BITRATE_KBPS * 1000) / 8;
+            
+            // Filtrar solo videos y por tamaño estimado
+            const videos = result.videos
+                .filter(video => {
+                    if (video.type !== 'video') return false;
+                    let durationSec = 0;
+                    if (video.seconds) durationSec = video.seconds;
+                    else if (video.duration && typeof video.duration === 'string') {
+                        const parts = video.duration.split(':').map(Number);
+                        if (parts.length === 3) durationSec = parts[0]*3600 + parts[1]*60 + parts[2];
+                        else if (parts.length === 2) durationSec = parts[0]*60 + parts[1];
+                    }
+                    const estimatedSizeMB = (durationSec * BYTES_PER_SEC) / (1024 * 1024);
+                    return estimatedSizeMB <= MAX_SIZE_MB;
+                })
+                .slice(0, 10); // Limitar a 10 para evitar sobrecarga
+
+            const ytdlp = new YtDlp();
+            const promises = videos.map(async video => {
+                let durationSec = 0;
+                if (video.seconds) durationSec = video.seconds;
+                else if (video.duration && typeof video.duration === 'string') {
+                    const parts = video.duration.split(':').map(Number);
+                    if (parts.length === 3) durationSec = parts[0]*3600 + parts[1]*60 + parts[2];
+                    else if (parts.length === 2) durationSec = parts[0]*60 + parts[1];
+                }
+                let isDashOrHls = false;
+                let isDownloadable = false;
+                let downloadError = null;
+                try {
+                    const info = await ytdlp.getInfoAsync(video.url);
+                    if (info && info.formats) {
+                        const allSegmented = info.formats.every(f => f.protocol === 'dash' || f.protocol === 'm3u8');
+                        isDashOrHls = allSegmented;
+                    }
+                    try {
+                        await ytdlp.download(video.url, {
+                            output: 'simulate',
+                            simulate: true,
+                            extractAudio: true,
+                            audioFormat: 'm4a'
+                        });
+                        isDownloadable = true;
+                    } catch (err) {
+                        isDownloadable = false;
+                        downloadError = err?.message || String(err);
+                    }
+                } catch (err) {
+                    downloadError = err?.message || String(err);
+                }
+                return {
+
+                    url: video.url,
+
+                };
+            });
+            return await Promise.all(promises);
+        } catch (error) {
+            throw new AppError('Error buscando video de YouTube por nombre', 500, error);
+        }
+    }
+    /**
+     * Descarga el audio de un video de YouTube, lo sube a Supabase, lo asigna a la categoría 'NGFY' y crea el registro en la base de datos.
+     * Si ocurre error al crear el modelo, elimina el archivo de Supabase.
+     */
+    async downloadYoutubeAudioAndUpload(url) {
+        const ytdlp = new YtDlp();
+        const info = await ytdlp.getInfoAsync(url);
+        const baseName = sanitizeFileName(`${info.title || 'audio_youtube'}`);
+        const outputPattern = path.resolve(`${baseName}.%(ext)s`);
+        let outputPath = null;
+        let audioFile = null;
+        let categoryId = null;
+        let supabasePath = null;
+        try {
+            // Buscar la categoría por nombre 'NGFY'
+            const CategoryModel = (await import('../schemas/category.js')).default;
+            const category = await CategoryModel.findOne({ name: 'Pop' });
+            console.log(category);
+            
+            if (!category) throw new AppError("No existe la categoría 'NGFY'", 400, 'downloadYoutubeAudioAndUpload');
+            categoryId = category._id;
+
+            ytdlp.download(url, {
+                output: outputPattern,
+                extractAudio: true,
+                audioFormat: 'm4a'
+            });
+
+            console.log('yt-dlp download finished');
+
+            const fsSync = await import('fs');
+            const waitTimeout = 60000;
+            const pollInterval = 200;
+            const start = Date.now();
+            let found = false;
+            const validExts = ['.m4a', '.webm', '.mp3', '.opus', '.ogg'];
+            while (Date.now() - start < waitTimeout) {
+                const files = fsSync.readdirSync(process.cwd())
+                    .filter(f => validExts.some(ext => f.endsWith(ext)) && f.includes(baseName));
+                if (files.length > 0) {
+                    files.sort((a, b) => fsSync.statSync(b).mtimeMs - fsSync.statSync(a).mtimeMs);
+                    for (const f of files) {
+                        const stat = fsSync.statSync(f);
+                        if (stat.size > 0) {
+                            audioFile = f;
+                            outputPath = path.resolve(f);
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+                if (found) break;
+                await new Promise(res => setTimeout(res, pollInterval));
+            }
+            if (!found) {
+                throw new AppError("yt-dlp no generó el archivo de audio a tiempo", 500, { baseName });
+            }
+
+            console.log('Archivo de audio listo:', audioFile);
+            const buffer = await fs.readFile(outputPath);
+
+            const ext = path.extname(audioFile).toLowerCase();
+            let contentType = 'audio/mp4';
+            if (ext === '.webm') contentType = 'audio/webm';
+            else if (ext === '.mp3') contentType = 'audio/mpeg';
+            else if (ext === '.opus') contentType = 'audio/ogg';
+            else if (ext === '.ogg') contentType = 'audio/ogg';
+
+            const { data, error } = await supabaseClient.storage.from('audios').upload(
+                audioFile,
+                buffer,
+                {
+                    cacheControl: '3600',
+                    upsert: false,
+                    contentType
+                }
+            );
+            if (error) throw new AppError("Error subiendo audio a Supabase", 500, error);
+            await fs.unlink(outputPath);
+            supabasePath = data?.path || audioFile;
+
+            const songData = {
+                title: info.title,
+                artist: info.uploader || info.channel || 'Desconocido',
+                url: process.env.SUPABASE_URL_UPLOAD + '/' + supabasePath,
+                duration: info.duration || 0,
+                poster_image: info.thumbnail || undefined,
+                category: categoryId
+            };
+            let song;
+            try {
+                song = await SongModel.create(songData);
+                if (!song) throw new AppError("Error al crear la canción", 400, "downloadYoutubeAudioAndUpload");
+            } catch (error) {
+                await supabaseClient.storage.from('audios').remove([supabasePath]);
+                throw error;
+            }
+            return song;
+        } catch (error) {
+            console.error('Error real al procesar audio de YouTube:', error);
+            try {
+                const fsSync = await import('fs');
+                const validExts = ['.m4a', '.webm', '.mp3', '.opus', '.ogg'];
+                const files = fsSync.readdirSync(process.cwd());
+                await Promise.all(
+                    files.filter(f => validExts.some(ext => f.endsWith(ext)) && f.includes(baseName)).map(async f => {
+                        try { await fs.unlink(path.resolve(f)); } catch {}
+                    })
+                );
+            } catch {}
+            throw new AppError("Error procesando audio de YouTube", 500, error);
+        }
+    }
+
+    /**
+     * Descarga y sube múltiples audios de YouTube desde un array de URLs.
+     */
+    async downloadMultipleYoutubeAudios(urls = []) {
+        // Si recibes [{url: ...}], conviértelo a [url, url, ...]
+        if (Array.isArray(urls) && urls.length > 0 && typeof urls[0] === 'object' && urls[0].url) {
+            urls = urls.map(obj => obj.url);
+        }
+        if (!Array.isArray(urls) || urls.length === 0) {
+            throw new AppError("Debes proporcionar un array de URLs", 400, "downloadMultipleYoutubeAudios");
+        }
+        console.log(urls);
+        
+        const results = [];
+        for (const url of urls) {
+            try {
+                const song = await this.downloadYoutubeAudioAndUpload(url);
+                results.push({ url, success: true, song });
+            } catch (error) {
+                results.push({ url, success: false, error: error.message || error });
+            }
+        }
+        return results;
     }
 }
 

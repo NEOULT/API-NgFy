@@ -36,9 +36,9 @@ const songSchema = new moongoose.Schema({
         default: 'https://i.postimg.cc/xTSJhVPn/Chat-GPT-Image-26-jun-2025-06-32-14-p-m.png', // URL por defecto
         validate: {
             validator: function (url) {
-                return /^https?:\/\/.+\.(jpg|jpeg|png|gif)$/.test(url); // Validación de URL de imagen
+                return /^https?:\/\/.+\.(jpg|jpeg|png|gif|webp)$/.test(url); // Validación de URL de imagen
             },
-            message: 'Poster image must be a valid URL ending with .jpg, .jpeg, .png, or .gif',
+            message: 'Poster image must be a valid URL ending with .jpg, .jpeg, .png, .gif, or .webp',
         },
     },
     category: {
