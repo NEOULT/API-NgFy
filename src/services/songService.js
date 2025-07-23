@@ -128,6 +128,8 @@ class SongService {
             );
             if (error) throw new AppError("Error uploading song", 500, error);
             songData.url = process.env.SUPABASE_URL_UPLOAD + "/" + data.path;
+        }else{
+            throw new AppError("File is required for song update", 400, "SongService.updateSong");
         }
         const song = await SongModel.update(songId, songData);
         if (!song) throw new AppError("Song not found", 404, "SongService.updateSong");
