@@ -14,9 +14,9 @@ class SongModel extends BaseModel {
         const skip = (currentPage - 1) * limit;
         const total = await this.model.countDocuments(filter);
         const data = await this.model.find(filter)
+            .sort({ _id: 1 })
             .skip(skip)
             .limit(limit)
-            .sort({ createdAt: -1 });
         return {
             totalItems: total,
             currentPage,
