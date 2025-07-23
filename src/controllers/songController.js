@@ -43,6 +43,20 @@ class SongController {
         sendResponse(res, 200, 'Canción encontrada exitosamente', song);
     });
 
+    search = catchAsync(async (req, res, next) => {
+        const { currentPage, limit, title } = req.body;
+        const filter = title ? { title: { $regex: title, $options: 'i' } } : {};
+
+        const options = {
+            currentPage: Number(currentPage),
+            limit: Number(limit)
+        }
+        
+        const result = await SongService.getPaginatedSongs(filter,options)
+        if(!result.data.data) sendResponse(res, 404, `No hay Canciones por el termino '${title}'`)
+        sendResponse(res, 200, 'Estas son las Canciones que Encontramos para ti', result)
+    });
+
     paginate = catchAsync(async (req, res, next) => {
         const { currentPage = 1, limit = 10, ...filters } = req.body;
         const options = {currentPage: parseInt(currentPage), limit: parseInt(limit)}

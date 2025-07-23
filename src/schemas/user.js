@@ -36,6 +36,10 @@ const userSchema = new mongoose.Schema({
         type: Boolean,
         default: false, // Por defecto, el usuario no es autor
     },
+    favorite_songs: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Song'
+    }],
     // Referencia a las listas de reproducción creadas por el usuario
     created_songs: [{
         type: mongoose.Schema.Types.ObjectId,

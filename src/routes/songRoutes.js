@@ -2,6 +2,7 @@ import express from 'express';
 import SongController from '../controllers/songController.js';
 import { upload } from '../middlewares/upload.js';
 import { verifyToken } from '../services/authService.js';
+import songController from '../controllers/songController.js';
 
 const router = express.Router();
 
@@ -9,6 +10,7 @@ router.get('/', SongController.getYoutubeInfoByName); // GET /songs
 router.get('/categories', SongController.getCategoriesSong); // GET /songs/categories
 router.get('/download', SongController.downloadYoutubeMultipleAudios); // GET /songs/all
 router.post('/paginate', SongController.paginate); // GET /songs/paginate
+router.post('/search',songController.search)
 router.get('/:id', SongController.getSongById); // GET /songs/:id
 router.post('/', upload.single('file'), verifyToken, SongController.create); // POST /songs
 router.put('/:id', upload.single('file'), verifyToken, SongController.update); // PUT /songs/:id
