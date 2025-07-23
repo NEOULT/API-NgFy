@@ -41,11 +41,11 @@ const songSchema = new moongoose.Schema({
             message: 'Poster image must be a valid URL ending with .jpg, .jpeg, .png, .gif, or .webp',
         },
     },
-    category: {
+    category: [{
         type: moongoose.Schema.Types.ObjectId,
         ref: 'Category',
-        required: [true, 'Category is required'], // Categoría es obligatoria
-    },
+        required: true,
+    }],
 })
 
 export default moongoose.model('Song', songSchema);
