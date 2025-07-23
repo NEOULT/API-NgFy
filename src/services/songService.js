@@ -38,15 +38,15 @@ class SongService {
             throw new AppError("Ya existe una canción con ese título", 400, { title: songData.title });
         }
 
-        // Obtener duración del archivo de audio
-        let duration = 0;
-        try {
-            const metadata = await parseBuffer(songData.file.buffer, songData.file.mimetype);
-            duration = Math.round(metadata.format.duration); // duración en segundos
-        } catch (error) {
-            console.log("No se pudo obtener la duración del archivo:", error);
-            throw new AppError("No se pudo obtener la duración del archivo de audio", 400, error);
-        }
+        // // Obtener duración del archivo de audio
+        // let duration = 0;
+        // try {
+        //     const metadata = await parseBuffer(songData.file.buffer, songData.file.mimetype);
+        //     duration = Math.round(metadata.format.duration); // duración en segundos
+        // } catch (error) {
+        //     console.log("No se pudo obtener la duración del archivo:", error);
+        //     throw new AppError("No se pudo obtener la duración del archivo de audio", 400, error);
+        // }
 
         // Validar datos usando el modelo Mongoose real
         const { default: Song } = await import('../schemas/song.js');
@@ -60,7 +60,6 @@ class SongService {
 
         const response = await this.uploadSong(songData.file, songData.title);
         songData.url = process.env.SUPABASE_URL_UPLOAD + "/" + response.path;
-        songData.duration = duration; // Asignar duración calculada
 
         let song;
         try {
