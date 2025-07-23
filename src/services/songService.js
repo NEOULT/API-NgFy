@@ -61,6 +61,7 @@ class SongService {
         const response = await this.uploadSong(songData.file, songData.title);
         songData.url = process.env.SUPABASE_URL_UPLOAD + "/" + response.path;
 
+
         let song;
         try {
             song = await SongModel.create(songData);
@@ -108,7 +109,12 @@ class SongService {
         let safeTitle = '';
         let fileName = '';
         if (songData.file) {
-            ext = songData.file.originalname.substring(songData.file.originalname.lastIndexOf('.'));
+
+            if (!songData.file.originalname) {
+                ext = songData.file.name.substring(songData.file.name.lastIndexOf('.'));
+            } else {
+                ext = songData.file.originalname.substring(songData.file.originalname.lastIndexOf('.'));
+            }
             safeTitle = sanitizeFileName(songData.title);
             fileName = safeTitle + ext;
             const { data, error } = await supabaseClient.storage.from('audios').upload(
@@ -183,7 +189,15 @@ class SongService {
      * Sube un archivo de canción a Supabase usando el título como nombre de archivo.
      */
     async uploadSong(songFile, songTitle) {
-        const ext = songFile.originalname.substring(songFile.originalname.lastIndexOf('.'));
+
+        let ext = '';
+        
+        if(!songFile.originalname){
+            ext = songFile.name.substring(songFile.name.lastIndexOf('.'));
+        }else{
+            ext = songFile.originalname.substring(songFile.originalname.lastIndexOf('.'));
+        }
+       
         const safeTitle = sanitizeFileName(songTitle);
         const fileName = safeTitle + ext;
         const { data, error } = await supabaseClient.storage.from('audios').upload(
