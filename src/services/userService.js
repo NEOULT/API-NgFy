@@ -73,6 +73,13 @@ class UserService {
         return data;
     }
 
+    async toggleFavoriteSong(userId, songId){
+        const data = await UserModel.toggleFavoriteSong(userId,songId);
+        if (!data) throw new AppError("Error al Actualizar el Favorito",404,null)
+
+        return data;
+    }
+
 }
     
 

@@ -76,6 +76,15 @@ class userController {
         });
     });  
 
+    toggleFavorite = catchAsync(async (req,res,next) => {
+        const userId = req.user.user_id
+        const songId = req.params.id
+        const favorite = await userService.toggleFavoriteSong(userId,songId)
+
+        if(favorite.action == 'added') sendResponse(res, 200, "Canción Añadida a Favoritos Exitosamente",favorite);
+        else sendResponse(res, 200, "Canción Eliminada de Favoritos Exitosamente",favorite);
+    })
+
 }
 
 export default new userController();

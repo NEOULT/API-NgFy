@@ -59,5 +59,27 @@ class userModel extends BaseModel {
         return await user.save();
     }
 
+    async toggleFavoriteSong(userId, songId) {
+        const user = await User.findById(userId);
+        if (!user) return null;
+
+        const isFavorite = user.favorite_songs.some(id => id.toString() === songId.toString());
+        let action;
+        if (isFavorite) {
+            user.favorite_songs = user.favorite_songs.filter(id => id.toString() !== songId.toString());
+            action = 'removed';
+        } else {
+            user.favorite_songs.push(songId);
+            action = 'added';
+        }
+
+        await user.save();
+        return { action, user };
+    }
+
+    async getProfile(userId) {
+        return await User.findById(userId).populate('favorite_songs').populate('created_songs');
+    }
+
 }
 export default new userModel();
