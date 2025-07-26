@@ -1,7 +1,7 @@
 import PlaylistModel from "../models/playlist.js";
 import { AppError } from "../utils/appError.js";
-
 class PlaylistService {
+
     async getSongsByPlaylistId(playlistId) {
         if (!playlistId) throw new AppError("Playlist ID is required", 400, "PlaylistService.getSongsByPlaylistId");
         
@@ -48,6 +48,15 @@ class PlaylistService {
         const playlists = await PlaylistModel.findAll()
         if (!playlists || playlists.length === 0) {
             throw new AppError("No playlists found", 404, "PlaylistService.getAllPlaylists");
+        }
+        return playlists;
+    }
+
+    async getPlaylistsByUserId(userId, options = { currentPage: 1, limit: 10 }) {
+        const filter = { user_id: userId };
+        const playlists = await PlaylistModel.paginate(filter, options);
+        if (!playlists || playlists.data.length === 0) {
+            throw new AppError("No playlist found for this user", 404, "PlaylistService.paginate");
         }
         return playlists;
     }

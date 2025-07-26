@@ -1,8 +1,9 @@
 import UserModel from "../models/user.js";
 import { AppError } from "../utils/appError.js";
+import BaseModel from "../utils/baseModel.js";
 import authService from "./authService.js";
 
-class UserService {
+class UserService extends BaseModel {
 
     async createUser({ email, password, name, lastName,profileImage }) {
         
