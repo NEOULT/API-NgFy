@@ -32,6 +32,20 @@ class PlaylistController {
         const playlists = await playlistService.getAllPlaylists();
         sendResponse(res, 200, 'Listas de reproducción obtenidas exitosamente', playlists);
     });
+
+    deletePlaylist = catchAsync(async (req, res, next) => {
+        const { id: playlistId } = req.params;
+        await playlistService.deletePlaylist(playlistId);
+        sendResponse(res, 200, 'Lista de reproducción eliminada exitosamente');
+    });
+
+    updatedPlaylist = catchAsync(async (req, res, next) => {
+        const { id: playlistId } = req.params;
+        const updatedData = req.body;
+        
+        const updatedPlaylist = await playlistService.updatePlaylist(playlistId, updatedData);
+        sendResponse(res, 200, 'Lista de reproducción actualizada exitosamente', updatedPlaylist);
+    });
 }
 
 export default new PlaylistController();

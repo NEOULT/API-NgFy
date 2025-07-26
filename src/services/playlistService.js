@@ -51,6 +51,27 @@ class PlaylistService {
         }
         return playlists;
     }
+
+    async deletePlaylist(playlistId) {
+        if (!playlistId) {
+            throw new AppError("Playlist ID is required", 400, "PlaylistService.deletePlaylist");
+        }
+        
+        return await PlaylistModel.delete(playlistId);
+    }
+
+    async updatePlaylist(playlistId, updatedData) {
+        if (!playlistId || !updatedData) {
+            throw new AppError("Playlist ID and updated data are required", 400, "PlaylistService.updatePlaylist");
+        }
+
+        const updatedPlaylist = await PlaylistModel.update(playlistId, updatedData);
+        if (!updatedPlaylist) {
+            throw new AppError("Failed to update playlist", 500, "PlaylistService.updatePlaylist");
+        }
+
+        return updatedPlaylist;
+    }
 }
 
 export default new PlaylistService();
