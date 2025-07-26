@@ -105,32 +105,32 @@ class SongService {
                 throw new AppError("Ya existe una canción con ese título", 400, { title: songData.title });
             }
         }
-        let ext = '';
-        let safeTitle = '';
-        let fileName = '';
-        if (songData.file) {
+        // let ext = '';
+        // let safeTitle = '';
+        // let fileName = '';
+        // if (songData.file) {
 
-            if (!songData.file.originalname) {
-                ext = songData.file.name.substring(songData.file.name.lastIndexOf('.'));
-            } else {
-                ext = songData.file.originalname.substring(songData.file.originalname.lastIndexOf('.'));
-            }
-            safeTitle = sanitizeFileName(songData.title);
-            fileName = safeTitle + ext;
-            const { data, error } = await supabaseClient.storage.from('audios').upload(
-                fileName,
-                songData.file.buffer,
-                {
-                    cacheControl: '3600',
-                    upsert: true,
-                    contentType: songData.file.mimetype
-                }
-            );
-            if (error) throw new AppError("Error uploading song", 500, error);
-            songData.url = process.env.SUPABASE_URL_UPLOAD + "/" + data.path;
-        }else{
-            throw new AppError("File is required for song update", 400, "SongService.updateSong");
-        }
+        //     if (!songData.file.originalname) {
+        //         ext = songData.file.name.substring(songData.file.name.lastIndexOf('.'));
+        //     } else {
+        //         ext = songData.file.originalname.substring(songData.file.originalname.lastIndexOf('.'));
+        //     }
+        //     safeTitle = sanitizeFileName(songData.title);
+        //     fileName = safeTitle + ext;
+        //     const { data, error } = await supabaseClient.storage.from('audios').upload(
+        //         fileName,
+        //         songData.file.buffer,
+        //         {
+        //             cacheControl: '3600',
+        //             upsert: true,
+        //             contentType: songData.file.mimetype
+        //         }
+        //     );
+        //     if (error) throw new AppError("Error uploading song", 500, error);
+        //     songData.url = process.env.SUPABASE_URL_UPLOAD + "/" + data.path;
+        // }else{
+        //     throw new AppError("File is required for song update", 400, "SongService.updateSong");
+        // }
         const song = await SongModel.update(songId, songData);
         if (!song) throw new AppError("Song not found", 404, "SongService.updateSong");
         return song;
