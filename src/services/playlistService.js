@@ -1,4 +1,5 @@
 import PlaylistModel from "../models/playlist.js";
+import SongModel from "../models/song.js";
 import { AppError } from "../utils/appError.js";
 class PlaylistService {
 
@@ -58,6 +59,22 @@ class PlaylistService {
         if (!playlists || playlists.data.length === 0) {
             throw new AppError("No playlist found for this user", 404, "PlaylistService.paginate");
         }
+
+        // Buscar el primer poster_image no nulo en las canciones de cada playlist
+        playlists.data = await Promise.all(playlists.data.map(async playlist => {
+            let posterImage = null;
+            if (playlist.songs && playlist.songs.length > 0) {
+                for (const songId of playlist.songs) {
+                    const song = await SongModel.findById(songId);
+                    if (song && song.poster_image) {
+                        posterImage = song.poster_image;
+                        break;
+                    }
+                }
+            }
+            return { ...playlist.toObject(), poster_image: posterImage };
+        }));
+
         return playlists;
     }
 }
