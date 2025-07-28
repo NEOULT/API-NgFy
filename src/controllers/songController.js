@@ -44,17 +44,24 @@ class SongController {
     });
 
     search = catchAsync(async (req, res, next) => {
-        const { currentPage, limit, title } = req.body;
-        const filter = title ? { title: { $regex: title, $options: 'i' } } : {};
+        const { currentPage, limit, title, category } = req.body;
+        const filter = {};
+
+        if (title) {
+            filter.title = { $regex: title, $options: 'i' };
+        }
+        if (category) {
+            filter.category = category;
+        }
 
         const options = {
             currentPage: Number(currentPage),
             limit: Number(limit)
-        }
+        };
         
-        const result = await SongService.getPaginatedSongs(filter,options)
-        if(!result.data.data) sendResponse(res, 404, `No hay Canciones por el termino '${title}'`)
-        sendResponse(res, 200, 'Estas son las Canciones que Encontramos para ti', result)
+        const result = await SongService.getPaginatedSongs(filter, options);
+        if (!result.data) return sendResponse(res, 404, `No hay Canciones por el término '${title || category}'`);
+        sendResponse(res, 200, 'Estas son las Canciones que Encontramos para ti', result);
     });
 
     paginate = catchAsync(async (req, res, next) => {
