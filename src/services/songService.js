@@ -146,6 +146,7 @@ class SongService {
             const urlParts = song.url.split('/');
             const fileName = urlParts[urlParts.length - 1];
             await supabaseClient.storage.from('audios').remove([fileName]);
+            await SongModel.delete(songId);
         }
         return song;
     }
