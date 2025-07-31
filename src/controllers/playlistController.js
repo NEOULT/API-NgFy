@@ -33,6 +33,15 @@ class PlaylistController {
         sendResponse(res, 200, 'Listas de reproducción obtenidas exitosamente', playlists);
     });
 
+    getPlaylistsByUserId = catchAsync(async (req, res, next) => {
+        const userId = req.user.user_id;
+        const playlists = await playlistService.getPlaylistsByUserId(userId, { currentPage: 1, limit: 10 });
+        if (!playlists || playlists.data.length === 0) {
+            return sendResponse(res, 404, 'No se encontraron playlists para este usuario', null);
+        }
+        sendResponse(res, 200, 'Playlists encontradas exitosamente', playlists);
+    });
+
     deletePlaylist = catchAsync(async (req, res, next) => {
         const { id: playlistId } = req.params;
         await playlistService.deletePlaylist(playlistId);

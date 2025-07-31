@@ -1,12 +1,10 @@
 import User from '../schemas/user.js';
 import mongoose from 'mongoose';
-import BaseModel from '../utils/baseModel.js';
 import bcrypt from "bcrypt";
 
-class userModel extends BaseModel {
+class userModel {
     
     constructor() {
-        super(User);
     }
     
     async createUser(userData) {

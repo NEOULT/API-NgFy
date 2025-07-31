@@ -184,6 +184,8 @@ class SongService {
      */
     async getPaginatedSongs(filter = {}, options = { currentPage: 1, limit: 10 }) {
         const data = await SongModel.paginate(filter, options);
+        console.log(data);
+        
         return data;
     }
 
