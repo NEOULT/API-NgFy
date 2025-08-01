@@ -12,12 +12,11 @@ router.put('/profile', verifyToken, UserController.updateUserProfile); // PATCH 
 router.post('/', UserController.create);  // POST /users
 router.get('/profile',verifyToken,userController.getProfile)
 router.get('/toggleFavorite/:id',verifyToken,userController.toggleFavorite)
-router.delete('/', UserController.delete); // DELETE /users/:id
 
 router.route('/')
     .all(verifyToken) // Middleware de autenticación
     .get(UserController.getOne)    // GET /users/:id
     .put(UserController.update)  // PATCH /users/:id
-
+    .delete(UserController.delete); // DELETE /users/:id
 
 export default router;
